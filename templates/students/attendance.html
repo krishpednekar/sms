@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Attendance - {{ student.first_name }} {{ student.last_name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+            <i class="bi bi-calendar-check"></i> Manage Attendance
+            <small class="text-muted">{{ student.first_name }} {{ student.last_name }}</small>
+        </h2>
+        <a href="{{ url_for('view_student', id=student.id) }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Profile
+        </a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form method="POST">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="subject" class="form-label">Subject</label>
+                        <select class="form-select" id="subject" name="subject" required>
+                            <option value="">Select Subject</option>
+                            {% for subject in subjects %}
+                            <option value="{{ subject.id }}">{{ subject.code }} - {{ subject.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="date" class="form-label">Date</label>
+                        <input type="date" class="form-control" id="date" name="date" 
+                               value="{{ datetime.utcnow().strftime('%Y-%m-%d') }}" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-select" id="status" name="status" required>
+                            <option value="Present">Present</option>
+                            <option value="Absent">Absent</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Record Attendance
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">Attendance History</h5>
+        </div>
+        <div class="card-body">
+            {% if student.attendances %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Subject</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in student.attendances|sort(attribute='date', reverse=True) %}
+                        <tr>
+                            <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ record.subject.code }}</td>
+                            <td>
+                                <span class="badge bg-{% if record.status == 'Present' %}success{% else %}danger{% endif %}">
+                                    {{ record.status }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info mb-0">No attendance records found.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

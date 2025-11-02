@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h2>Edit Student</h2>
+    <form method="POST" action="{{ url_for('edit_student', id=student.id) }}">
+        <div class="mb-3">
+            <label for="student_id" class="form-label">Student ID</label>
+            <input type="text" class="form-control" id="student_id" name="student_id" value="{{ student.student_id }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="first_name" class="form-label">First Name</label>
+            <input type="text" class="form-control" id="first_name" name="first_name" value="{{ student.first_name }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="last_name" class="form-label">Last Name</label>
+            <input type="text" class="form-control" id="last_name" name="last_name" value="{{ student.last_name }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="email" class="form-label">Email</label>
+            <input type="email" class="form-control" id="email" name="email" value="{{ student.email }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="phone" class="form-label">Phone</label>
+            <input type="text" class="form-control" id="phone" name="phone" value="{{ student.phone }}">
+        </div>
+        <div class="mb-3">
+            <label for="address" class="form-label">Address</label>
+            <textarea class="form-control" id="address" name="address" rows="3">{{ student.address }}</textarea>
+        </div>
+        <div class="mb-3">
+            <label for="program" class="form-label">Program</label>
+            <input type="text" class="form-control" id="program" name="program" value="{{ student.program }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="semester" class="form-label">Semester</label>
+            <input type="number" class="form-control" id="semester" name="semester" value="{{ student.semester }}" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Update</button>
+        <a href="{{ url_for('list_students') }}" class="btn btn-secondary">Cancel</a>
+    </form>
+{% endblock %}

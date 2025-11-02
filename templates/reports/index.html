@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-container">
+    <!-- Hero Section -->
+    <div class="hero-section text-center">
+        <h1 class="display-4">Welcome to <span class="highlight">CampusTrack</span></h1>
+        <p class="lead">Your intelligent student management solution</p>
+    </div>
+
+    <!-- Quick Attendance Panel -->
+    <div class="attendance-panel">
+        <h3><i class="bi bi-calendar-check"></i> Today's Attendance</h3>
+        <div class="attendance-buttons">
+            <button class="btn-present pulse">Present</button>
+            <button class="btn-absent">Absent</button>
+        </div>
+        <div class="attendance-stats">
+            <div class="stat-card">
+                <span class="stat-number">87%</span>
+                <span class="stat-label">This Week</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number">92%</span>
+                <span class="stat-label">This Month</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Cards with Hover Effects -->
+    <div class="action-grid">
+        <div class="action-card student-mgmt">
+            <i class="bi bi-people-fill"></i>
+            <h4>Student Management</h4>
+            <a href="{{ url_for('list_students') }}" class="stretched-link"></a>
+        </div>
+        
+        <div class="action-card subject-mgmt">
+            <i class="bi bi-book-half"></i>
+            <h4>Subject Management</h4>
+            <a href="{{ url_for('list_subjects') }}" class="stretched-link"></a>
+        </div>
+        
+        <div class="action-card reports">
+            <i class="bi bi-graph-up-arrow"></i>
+            <h4>Analytics Dashboard</h4>
+            <a href="{{ url_for('view_reports') }}" class="stretched-link"></a>
+        </div>
+    </div>
+
+    <!-- Recent Activity Timeline -->
+    <div class="activity-timeline">
+        <h3><i class="bi bi-clock-history"></i> Recent Activity</h3>
+        <div class="timeline-item new-student">
+            <span>New student registered</span>
+            <small>2 minutes ago</small>
+        </div>
+        <div class="timeline-item attendance-update">
+            <span>Attendance marked for CS101</span>
+            <small>Today, 10:30 AM</small>
+        </div>
+    </div>
+</div>
+{% endblock %}

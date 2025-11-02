@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2>Enroll {{ student.first_name }} in Subjects</h2>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <form method="POST">
+            <div class="mb-3">
+                <label for="subject" class="form-label">Select Subject</label>
+                <select class="form-select" id="subject" name="subject" required>
+                    {% for subject in subjects %}
+                        {% if subject.id not in enrolled %}
+                        <option value="{{ subject.id }}">{{ subject.code }} - {{ subject.name }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Enroll</button>
+            <a href="{{ url_for('view_student', id=student.id) }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

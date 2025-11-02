@@ -1,0 +1,232 @@
+/* Modern Background */
+body {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Hero Section */
+.hero-section {
+    padding: 3rem 0;
+    background: rgba(255,255,255,0.9);
+    border-radius: 15px;
+    margin-bottom: 2rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.highlight {
+    color: #4361ee;
+    font-weight: 700;
+}
+
+/* Attendance Panel */
+.attendance-panel {
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    border-left: 5px solid #4361ee;
+}
+
+.attendance-buttons {
+    display: flex;
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.btn-present, .btn-absent {
+    flex: 1;
+    padding: 1rem;
+    border: none;
+    border-radius: 10px;
+    font-weight: bold;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-present {
+    background-color: #4cc9f0;
+    color: white;
+}
+
+.btn-absent {
+    background-color: #f8f9fa;
+    color: #495057;
+}
+
+.btn-present:hover {
+    background-color: #3a86ff;
+    transform: translateY(-3px);
+}
+
+/* Pulse animation for attention */
+.pulse {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(58, 134, 255, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(58, 134, 255, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(58, 134, 255, 0); }
+}
+
+/* Action Grid */
+.action-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.action-card {
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+}
+
+.action-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+}
+
+.action-card i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: #4361ee;
+}
+
+/* Activity Timeline */
+.activity-timeline {
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+}
+
+.timeline-item {
+    padding: 1rem;
+    border-left: 3px solid #4361ee;
+    margin-bottom: 1rem;
+    position: relative;
+}
+
+.timeline-item::before {
+    content: "";
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #4361ee;
+    left: -7.5px;
+    top: 20px;
+}
+/* Dashboard Styles */
+.dashboard-container {
+    padding: 2rem 0;
+}
+
+.action-card {
+    transition: all 0.3s ease;
+    border: none;
+    border-radius: 10px;
+}
+
+.action-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.action-icon {
+    font-size: 2.5rem;
+    color: #4361ee;
+    margin-bottom: 1rem;
+}
+
+.action-row {
+    margin-top: 2rem;
+}
+
+/* Calendar Section Styles */
+.card-header {
+    border-radius: 10px 10px 0 0 !important;
+}
+
+.btn-success {
+    background-color: #4cc9f0;
+    border-color: #4cc9f0;
+}
+
+.btn-success:hover {
+    background-color: #3a86ff;
+    border-color: #3a86ff;
+}
+/* Add these styles to your existing CSS */
+
+/* Marks table styling */
+.table-marks tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* Action buttons */
+.btn-mark-action {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+/* Responsive table actions */
+@media (max-width: 768px) {
+    .table-marks td:last-child {
+        white-space: normal;
+    }
+}
+
+/* Form input styling */
+.form-control-mark {
+    max-width: 120px;
+}
+
+/* Highlight current mark being edited */
+.mark-edit-highlight {
+    background-color: rgba(13, 110, 253, 0.1) !important;
+    border-left: 3px solid #0d6efd;
+}
+/* Add these styles to your CSS file */
+
+/* Marks button specific styling */
+.btn-marks {
+    background-color: #6c757d;
+    color: white;
+    border-color: #6c757d;
+}
+
+.btn-marks:hover {
+    background-color: #5a6268;
+    border-color: #545b62;
+    color: white;
+}
+
+/* Action buttons container */
+.action-buttons {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .action-buttons {
+        flex-direction: column;
+    }
+    
+    .action-buttons .btn {
+        margin-bottom: 0.2rem;
+    }
+}
