@@ -1,416 +1,494 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, render_template, request, redirect, url_for, flash
 from datetime import datetime
+import mysql.connector
+from mysql.connector import Error
 import os
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
 
-# Database configuration
-basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# -------------------- DATABASE CONNECTION --------------------
+def get_db_connection():
+    try:
+        connection = mysql.connector.connect(
+            host="localhost",
+            user="root",        # Default user for XAMPP
+            password="",        # Leave blank if not set
+            database="student_management"  # Ensure this DB exists in phpMyAdmin
+        )
+        return connection
+    except Error as e:
+        print(f"❌ Database connection failed: {e}")
+        return None
 
-db = SQLAlchemy(app)
+# -------------------- ROUTES --------------------
 
-print(f"Database path: {app.config['SQLALCHEMY_DATABASE_URI']}")
-# Models
-class Subject(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(20), unique=True, nullable=False)
-    name = db.Column(db.String(100), nullable=False)
-    credits = db.Column(db.Integer, nullable=False)
-
-class Student(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.String(20), unique=True, nullable=False)
-    first_name = db.Column(db.String(100), nullable=False)
-    last_name = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    phone = db.Column(db.String(15))
-    address = db.Column(db.Text)
-    program = db.Column(db.String(100), nullable=False)
-    semester = db.Column(db.Integer, nullable=False)
-    enrollments = db.relationship('Enrollment', backref='student', lazy=True)
-    marks = db.relationship('Mark', backref='student', lazy=True)
-    attendances = db.relationship('Attendance', backref='student', lazy=True)
-    @property
-    def available_subjects(self):
-        """Returns all subjects the student can potentially be marked on"""
-        enrolled = {e.subject_id for e in self.enrollments}
-        return Subject.query.filter(
-            (Subject.id.in_(enrolled)) | 
-            (Subject.id.notin_(enrolled))
-        ).all()
-
-class Enrollment(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('student.id'), nullable=False)
-    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=False)
-    enrollment_date = db.Column(db.Date, default=datetime.utcnow)
-    
-    # Relationships
-    subject = db.relationship('Subject', backref='enrollments')
-
-class Mark(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('student.id'), nullable=False)
-    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=False)
-    marks = db.Column(db.Float, nullable=False)
-    max_marks = db.Column(db.Float, nullable=False, default=100)
-    exam_date = db.Column(db.Date, default=datetime.utcnow)
-    
-    # Relationship
-    subject = db.relationship('Subject', backref='marks')
-
-class Attendance(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('student.id'), nullable=False)
-    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=False)
-    date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
-    status = db.Column(db.String(10), nullable=False)  # Present/Absent
-    subject = db.relationship('Subject')
-
-# Create tables
-with app.app_context():
-    db.create_all()
-
-# Routes
 @app.route('/')
 def index():
     return render_template('index.html')
 
+# ------------------------------------------------------------
+# STUDENTS
+# ------------------------------------------------------------
+
 @app.route('/students')
 def list_students():
-    students = Student.query.all()
+    conn = get_db_connection()
+    if not conn:
+        flash("Database connection failed", "danger")
+        return render_template('students/list.html', students=[])
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT * FROM students")
+        students = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
     return render_template('students/list.html', students=students)
 
-# ... (keep all your existing student CRUD routes)
 
-# New routes for enhanced features
-@app.route('/students/<int:id>/enroll', methods=['GET', 'POST'])
-def enroll_student(id):
-    student = Student.query.get_or_404(id)
-    if request.method == 'POST':
-        subject_id = request.form['subject']
-        enrollment = Enrollment(student_id=id, subject_id=subject_id)
-        db.session.add(enrollment)
-        db.session.commit()
-        flash('Enrollment successful!', 'success')
-        return redirect(url_for('view_student', id=id))
-    
-    subjects = Subject.query.all()
-    enrolled = [e.subject_id for e in student.enrollments]
-    return render_template('students/enroll.html', 
-                         student=student,
-                         subjects=subjects,
-                         enrolled=enrolled)
-
-@app.route('/students/<int:id>')
-def view_student(id):
-    student = Student.query.get_or_404(id)
-    enrollments = Enrollment.query.filter_by(student_id=id).all()
-    marks = Mark.query.filter_by(student_id=id).all()
-    attendance = Attendance.query.filter_by(student_id=id).all()
-    
-    # Calculate attendance percentage per subject
-    attendance_stats = {}
-    for enrollment in enrollments:
-        total = Attendance.query.filter_by(
-            student_id=id,
-            subject_id=enrollment.subject_id
-        ).count()
-        present = Attendance.query.filter_by(
-            student_id=id,
-            subject_id=enrollment.subject_id,
-            status='Present'
-        ).count()
-        attendance_stats[enrollment.subject_id] = {
-            'name': enrollment.subject.name,
-            'percentage': (present/total)*100 if total > 0 else 0
-        }
-    
-    return render_template('students/view.html',
-                         student=student,
-                         enrollments=enrollments,
-                         marks=marks,
-                         attendance=attendance,
-                         attendance_stats=attendance_stats,
-                         datetime=datetime) 
-
-@app.route('/students/<int:id>/attendance', methods=['GET', 'POST'])
-def manage_attendance(id):
-    student = Student.query.get_or_404(id)
-    if request.method == 'POST':
-        subject_id = request.form['subject']
-        date = datetime.strptime(request.form['date'], '%Y-%m-%d').date()
-        status = request.form['status']
-        
-        attendance = Attendance(
-            student_id=id,
-            subject_id=subject_id,
-            date=date,
-            status=status
-        )
-        db.session.add(attendance)
-        db.session.commit()
-        flash('Attendance recorded!', 'success')
-        return redirect(url_for('view_student', id=id))
-    
-    subjects = [e.subject for e in student.enrollments]
-    return render_template('students/attendance.html',
-                         student=student,
-                         subjects=subjects)
-
-# Add this route with your other student routes
 @app.route('/students/add', methods=['GET', 'POST'])
 def add_student():
     if request.method == 'POST':
-        student_data = {
-            'student_id': request.form['student_id'],
-            'first_name': request.form['first_name'],
-            'last_name': request.form['last_name'],
-            'email': request.form['email'],
-            'phone': request.form.get('phone'),
-            'address': request.form.get('address'),
-            'program': request.form['program'],
-            'semester': request.form['semester']
-        }
-        
-        student = Student(**student_data)
-        db.session.add(student)
-        try:
-            db.session.commit()
-            flash('Student added successfully!', 'success')
+        data = (
+            request.form['student_id'],
+            request.form['first_name'],
+            request.form['last_name'],
+            request.form['email'],
+            request.form.get('phone'),
+            request.form.get('address'),
+            request.form['program'],
+            request.form['semester']
+        )
+        conn = get_db_connection()
+        if not conn:
+            flash("Database connection failed", "danger")
             return redirect(url_for('list_students'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error adding student: {str(e)}', 'danger')
-    
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO students (student_id, first_name, last_name, email, phone, address, program, semester)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            """, data)
+            conn.commit()
+            flash('✅ Student added successfully!', 'success')
+        except Error as e:
+            conn.rollback()
+            flash(f'❌ Error adding student: {e}', 'danger')
+        finally:
+            cursor.close()
+            conn.close()
+        return redirect(url_for('list_students'))
     return render_template('students/add.html')
 
-# Add these new routes to your existing app.py
+@app.route('/students/edit/<int:id>', methods=['GET', 'POST'])
+def edit_student(id):
+    conn = get_db_connection()
+    if not conn:
+        flash("Database connection failed", "danger")
+        return redirect(url_for('list_students'))
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT * FROM students WHERE id=%s", (id,))
+        student = cursor.fetchone()
+        if not student:
+            flash("Student not found!", "danger")
+            return redirect(url_for('list_students'))
 
-@app.route('/students/<int:student_id>/marks/<int:mark_id>/edit', methods=['GET', 'POST'])
-def edit_mark(student_id, mark_id):
-    student = Student.query.get_or_404(student_id)
-    mark = Mark.query.get_or_404(mark_id)
-    
-    if request.method == 'POST':
-        mark.subject_id = request.form['subject']
-        mark.marks = float(request.form['marks'])
-        mark.max_marks = float(request.form.get('max_marks', 100))
-        mark.exam_date = datetime.strptime(request.form['exam_date'], '%Y-%m-%d')
-        
-        db.session.commit()
-        flash('Mark updated successfully!', 'success')
-        return redirect(url_for('view_student', id=student_id))
-    
-    subjects = [e.subject for e in student.enrollments]
-    return render_template('students/edit_mark.html',
-                         student=student,
-                         mark=mark,
-                         subjects=subjects)
+        if request.method == 'POST':
+            updated = (
+                request.form['student_id'],
+                request.form['first_name'],
+                request.form['last_name'],
+                request.form['email'],
+                request.form.get('phone'),
+                request.form.get('address'),
+                request.form['program'],
+                request.form['semester'],
+                id
+            )
+            try:
+                cursor.execute("""
+                    UPDATE students SET student_id=%s, first_name=%s, last_name=%s,
+                    email=%s, phone=%s, address=%s, program=%s, semester=%s WHERE id=%s
+                """, updated)
+                conn.commit()
+                flash('✅ Student updated successfully!', 'success')
+            except Error as e:
+                conn.rollback()
+                flash(f'❌ Error updating student: {e}', 'danger')
+            return redirect(url_for('list_students'))
 
-@app.route('/students/<int:student_id>/marks/<int:mark_id>/delete', methods=['POST'])
-def delete_mark(student_id, mark_id):
-    mark = Mark.query.get_or_404(mark_id)
-    db.session.delete(mark)
-    db.session.commit()
-    flash('Mark deleted successfully!', 'success')
-    return redirect(url_for('view_student', id=student_id))
+    finally:
+        cursor.close()
+        conn.close()
 
+    return render_template('students/edit.html', student=student)
 
-@app.route('/students/<int:id>/marks', methods=['GET', 'POST'])
-@app.route('/students/<int:id>/marks', methods=['GET', 'POST'])
-def manage_marks(id):
-    student = Student.query.get_or_404(id)
-    if request.method == 'POST':
-        subject_id = request.form['subject']
-        marks = float(request.form['marks'])
-        max_marks = float(request.form.get('max_marks', 100))
-        exam_date = datetime.strptime(request.form['exam_date'], '%Y-%m-%d')
-        
-        mark = Mark(
-            student_id=id,
-            subject_id=subject_id,
-            marks=marks,
-            max_marks=max_marks,
-            exam_date=exam_date
-        )
-        db.session.add(mark)
-        db.session.commit()
-        flash('Marks added successfully!', 'success')
-        return redirect(url_for('view_student', id=id))
-    
-    # Use the available_subjects property
-    subjects = student.available_subjects
-    
-    return render_template('students/marks.html',
-                         student=student,
-                         subjects=subjects,
-                         datetime=datetime)
+@app.route('/students/delete/<int:id>', methods=['POST'])
+def delete_student(id):
+    conn = get_db_connection()
+    if not conn:
+        flash("Database connection failed", "danger")
+        return redirect(url_for('list_students'))
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM marks WHERE student_id=%s", (id,))
+        cursor.execute("DELETE FROM attendance WHERE student_id=%s", (id,))
+        cursor.execute("DELETE FROM enrollments WHERE student_id=%s", (id,))
+        cursor.execute("DELETE FROM students WHERE id=%s", (id,))
+        conn.commit()
+        flash('✅ Student deleted successfully!', 'success')
+    except Error as e:
+        conn.rollback()
+        flash(f'❌ Error deleting student: {e}', 'danger')
+    finally:
+        cursor.close()
+        conn.close()
+    return redirect(url_for('list_students'))
 
-#------------------------------------------------
+# ------------------------------------------------------------
+# SUBJECTS
+# ------------------------------------------------------------
 
-# Subject Management Routes
 @app.route('/subjects')
 def list_subjects():
-    subjects = Subject.query.all()
+    conn = get_db_connection()
+    if not conn:
+        flash("Database connection failed", "danger")
+        return render_template('subjects/list.html', subjects=[])
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT * FROM subjects")
+        subjects = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
     return render_template('subjects/list.html', subjects=subjects)
 
 @app.route('/subjects/add', methods=['GET', 'POST'])
 def add_subject():
     if request.method == 'POST':
-        subject = Subject(
-            code=request.form['code'],
-            name=request.form['name'],
-            credits=int(request.form['credits'])
-        )
-        db.session.add(subject)
-        db.session.commit()
-        flash('Subject added successfully!', 'success')
+        data = (request.form['code'], request.form['name'], request.form['credits'])
+        conn = get_db_connection()
+        if not conn:
+            flash("Database connection failed", "danger")
+            return redirect(url_for('list_subjects'))
+        cursor = conn.cursor()
+        try:
+            cursor.execute("INSERT INTO subjects (code, name, credits) VALUES (%s,%s,%s)", data)
+            conn.commit()
+            flash('✅ Subject added successfully!', 'success')
+        except Error as e:
+            conn.rollback()
+            flash(f'❌ Error adding subject: {e}', 'danger')
+        finally:
+            cursor.close()
+            conn.close()
         return redirect(url_for('list_subjects'))
     return render_template('subjects/add.html')
 
 @app.route('/subjects/edit/<int:id>', methods=['GET', 'POST'])
 def edit_subject(id):
-    subject = Subject.query.get_or_404(id)
-    if request.method == 'POST':
-        subject.code = request.form['code']
-        subject.name = request.form['name']
-        subject.credits = int(request.form['credits'])
-        db.session.commit()
-        flash('Subject updated successfully!', 'success')
+    conn = get_db_connection()
+    if not conn:
+        flash("Database connection failed", "danger")
         return redirect(url_for('list_subjects'))
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT * FROM subjects WHERE id=%s", (id,))
+        subject = cursor.fetchone()
+        if not subject:
+            flash("Subject not found!", "danger")
+            return redirect(url_for('list_subjects'))
+
+        if request.method == 'POST':
+            updated = (request.form['code'], request.form['name'], request.form['credits'], id)
+            try:
+                cursor.execute("UPDATE subjects SET code=%s, name=%s, credits=%s WHERE id=%s", updated)
+                conn.commit()
+                flash('✅ Subject updated successfully!', 'success')
+            except Error as e:
+                conn.rollback()
+                flash(f'❌ Error updating subject: {e}', 'danger')
+            return redirect(url_for('list_subjects'))
+
+    finally:
+        cursor.close()
+        conn.close()
+
     return render_template('subjects/edit.html', subject=subject)
 
 @app.route('/subjects/delete/<int:id>', methods=['POST'])
 def delete_subject(id):
-    subject = Subject.query.get_or_404(id)
-    db.session.delete(subject)
-    db.session.commit()
-    flash('Subject deleted successfully!', 'success')
+    conn = get_db_connection()
+    if not conn:
+        flash("Database connection failed", "danger")
+        return redirect(url_for('list_subjects'))
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM subjects WHERE id=%s", (id,))
+        conn.commit()
+        flash('✅ Subject deleted successfully!', 'success')
+    except Error as e:
+        conn.rollback()
+        flash(f'❌ Error deleting subject: {e}', 'danger')
+    finally:
+        cursor.close()
+        conn.close()
     return redirect(url_for('list_subjects'))
 
-# Report Generation Routes
+# ------------------------------------------------------------
+# ENROLLMENT
+# ------------------------------------------------------------
+
+@app.route('/students/<int:id>/enroll', methods=['GET', 'POST'])
+def enroll_student(id):
+    conn = get_db_connection()
+    if not conn:
+        flash("Database connection failed", "danger")
+        return redirect(url_for('list_students'))
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT * FROM students WHERE id=%s", (id,))
+        student = cursor.fetchone()
+
+        cursor.execute("SELECT * FROM subjects")
+        subjects = cursor.fetchall()
+
+        if request.method == 'POST':
+            subject_id = request.form['subject']
+            try:
+                enrollment_date = datetime.utcnow().date()  # date only
+                cursor.execute("INSERT INTO enrollments (student_id, subject_id, enrollment_date) VALUES (%s,%s,%s)",
+                               (id, subject_id, enrollment_date))
+                conn.commit()
+                flash('✅ Enrollment successful!', 'success')
+            except Error as e:
+                conn.rollback()
+                flash(f'❌ Error enrolling student: {e}', 'danger')
+            return redirect(url_for('view_student', id=id))
+    finally:
+        cursor.close()
+        conn.close()
+
+    return render_template('students/enroll.html', student=student, subjects=subjects)
+
+# ------------------------------------------------------------
+# VIEW STUDENT DETAILS (Marks + Attendance)
+# ------------------------------------------------------------
+
+@app.route('/students/<int:id>')
+def view_student(id):
+    conn = get_db_connection()
+    if not conn:
+        flash("Database connection failed", "danger")
+        return redirect(url_for('list_students'))
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT * FROM students WHERE id=%s", (id,))
+        student = cursor.fetchone()
+
+        cursor.execute("""SELECT e.*, s.name AS subject_name 
+                          FROM enrollments e JOIN subjects s ON e.subject_id=s.id 
+                          WHERE e.student_id=%s""", (id,))
+        enrollments = cursor.fetchall()
+
+        cursor.execute("""SELECT m.*, s.name AS subject_name 
+                          FROM marks m LEFT JOIN subjects s ON m.subject_id=s.id 
+                          WHERE m.student_id=%s""", (id,))
+        marks = cursor.fetchall()
+
+        cursor.execute("""SELECT a.*, s.name AS subject_name 
+                          FROM attendance a LEFT JOIN subjects s ON a.subject_id=s.id 
+                          WHERE a.student_id=%s""", (id,))
+        attendance = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+    return render_template('students/view.html', student=student, enrollments=enrollments, marks=marks, attendance=attendance)
+
+# ------------------------------------------------------------
+# MARKS MANAGEMENT (added & fixed)
+# ------------------------------------------------------------
+
+@app.route('/students/<int:id>/marks', methods=['GET', 'POST'])
+def manage_marks(id):
+    """View/add marks for a student. Endpoint name uses 'id' to match templates."""
+    conn = get_db_connection()
+    if not conn:
+        flash("Database connection failed", "danger")
+        return redirect(url_for('list_students'))
+    cursor = conn.cursor(dictionary=True)
+    try:
+        # get student
+        cursor.execute("SELECT * FROM students WHERE id=%s", (id,))
+        student = cursor.fetchone()
+        if not student:
+            flash("Student not found", "danger")
+            return redirect(url_for('list_students'))
+
+        # for the form, show subjects (so user can choose subject by id)
+        cursor.execute("SELECT * FROM subjects")
+        subjects = cursor.fetchall()
+
+        if request.method == 'POST':
+            subject_id = request.form['subject_id']
+            marks_val = request.form['marks']
+            max_marks = request.form.get('max_marks', 100)
+            exam_date = request.form.get('exam_date') or datetime.utcnow().date()
+
+            try:
+                cursor.execute("""
+                    INSERT INTO marks (student_id, subject_id, marks, max_marks, exam_date)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (id, subject_id, marks_val, max_marks, exam_date))
+                conn.commit()
+                flash("✅ Marks added successfully!", "success")
+            except Error as e:
+                conn.rollback()
+                flash(f"❌ Error adding marks: {e}", "danger")
+            return redirect(url_for('manage_marks', id=id))
+
+        # fetch marks (with subject name)
+        cursor.execute("""
+            SELECT m.*, s.name AS subject_name
+            FROM marks m LEFT JOIN subjects s ON m.subject_id = s.id
+            WHERE m.student_id = %s
+            ORDER BY m.exam_date DESC
+        """, (id,))
+        marks = cursor.fetchall()
+
+    finally:
+        cursor.close()
+        conn.close()
+
+    return render_template('marks/manage.html', student=student, subjects=subjects, marks=marks)
+
+
+@app.route('/marks/edit/<int:mark_id>', methods=['GET', 'POST'])
+def edit_mark(mark_id):
+    conn = get_db_connection()
+    if not conn:
+        flash("Database connection failed", "danger")
+        return redirect(url_for('list_students'))
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT * FROM marks WHERE id=%s", (mark_id,))
+        mark = cursor.fetchone()
+        if not mark:
+            flash("Mark not found", "danger")
+            return redirect(url_for('list_students'))
+
+        # get subjects for dropdown
+        cursor.execute("SELECT * FROM subjects")
+        subjects = cursor.fetchall()
+
+        if request.method == 'POST':
+            subject_id = request.form['subject_id']
+            marks_val = request.form['marks']
+            max_marks = request.form.get('max_marks', 100)
+            exam_date = request.form.get('exam_date') or datetime.utcnow().date()
+
+            try:
+                cursor.execute("""
+                    UPDATE marks SET subject_id=%s, marks=%s, max_marks=%s, exam_date=%s
+                    WHERE id=%s
+                """, (subject_id, marks_val, max_marks, exam_date, mark_id))
+                conn.commit()
+                flash("✅ Mark updated successfully!", "success")
+            except Error as e:
+                conn.rollback()
+                flash(f"❌ Error updating mark: {e}", "danger")
+            return redirect(url_for('manage_marks', id=mark['student_id']))
+    finally:
+        cursor.close()
+        conn.close()
+
+    return render_template('marks/edit.html', mark=mark, subjects=subjects)
+
+
+@app.route('/marks/delete/<int:mark_id>', methods=['POST'])
+def delete_mark(mark_id):
+    conn = get_db_connection()
+    if not conn:
+        flash("Database connection failed", "danger")
+        return redirect(url_for('list_students'))
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT student_id FROM marks WHERE id=%s", (mark_id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("Mark not found", "danger")
+            return redirect(url_for('list_students'))
+        student_id = row['student_id']
+        cursor.execute("DELETE FROM marks WHERE id=%s", (mark_id,))
+        conn.commit()
+        flash("✅ Mark deleted successfully!", "success")
+    except Error as e:
+        conn.rollback()
+        flash(f"❌ Error deleting mark: {e}", "danger")
+    finally:
+        cursor.close()
+        conn.close()
+    return redirect(url_for('manage_marks', id=student_id))
+
+# ------------------------------------------------------------
+# REPORTS
+# ------------------------------------------------------------
+
 @app.route('/reports')
 def view_reports():
     return render_template('reports/index.html')
 
 @app.route('/reports/students')
 def student_reports():
-    students = Student.query.all()
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT * FROM students")
+        students = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
     return render_template('reports/students.html', students=students)
 
 @app.route('/reports/subjects')
 def subject_reports():
-    subjects = Subject.query.all()
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT * FROM subjects")
+        subjects = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
     return render_template('reports/subjects.html', subjects=subjects)
 
 @app.route('/reports/attendance')
 def attendance_reports():
-    # Get attendance summary for all students
-    attendance_data = []
-    students = Student.query.all()
-    
-    for student in students:
-        enrollments = Enrollment.query.filter_by(student_id=student.id).all()
-        student_data = {
-            'student': student,
-            'subjects': []
-        }
-        
-        for enrollment in enrollments:
-            total = Attendance.query.filter_by(
-                student_id=student.id,
-                subject_id=enrollment.subject_id
-            ).count()
-            
-            present = Attendance.query.filter_by(
-                student_id=student.id,
-                subject_id=enrollment.subject_id,
-                status='Present'
-            ).count()
-            
-            percentage = (present / total * 100) if total > 0 else 0
-            
-            student_data['subjects'].append({
-                'name': enrollment.subject.name,
-                'percentage': percentage
-            })
-        
-        attendance_data.append(student_data)
-    
-    return render_template('reports/attendance.html', attendance_data=attendance_data)
-
-#------------------------------------------------
-@app.route('/students/edit/<int:id>', methods=['GET', 'POST'])
-def edit_student(id):
-    student = Student.query.get_or_404(id)
-    
-    if request.method == 'POST':
-        # Update student data
-        student.student_id = request.form['student_id']
-        student.first_name = request.form['first_name']
-        student.last_name = request.form['last_name']
-        student.email = request.form['email']
-        student.phone = request.form.get('phone')
-        student.address = request.form.get('address')
-        student.program = request.form['program']
-        student.semester = request.form['semester']
-        
-        try:
-            db.session.commit()
-            flash('Student updated successfully!', 'success')
-            return redirect(url_for('list_students'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error updating student: {str(e)}', 'danger')
-
-    return render_template('students/edit.html', student=student)
-
-@app.route('/students/<int:id>/report')
-def student_report(id):
-    student = Student.query.get_or_404(id)
-    enrollments = Enrollment.query.filter_by(student_id=id).all()
-    marks = Mark.query.filter_by(student_id=id).all()
-    attendance = Attendance.query.filter_by(student_id=id).all()
-    
-    # Calculate attendance percentage per subject
-    attendance_stats = {}
-    for subj in [e.subject for e in enrollments]:
-        total = Attendance.query.filter_by(student_id=id, subject_id=subj.id).count()
-        present = Attendance.query.filter_by(student_id=id, subject_id=subj.id, status='Present').count()
-        attendance_stats[subj.id] = {
-            'name': subj.name,
-            'percentage': (present/total)*100 if total > 0 else 0
-        }
-    
-    return render_template('students/report.html',
-                         student=student,
-                         enrollments=enrollments,
-                         marks=marks,
-                         attendance=attendance,
-                         attendance_stats=attendance_stats)
-
-@app.route('/students/delete/<int:id>', methods=['POST'])
-def delete_student(id):
-    student = Student.query.get_or_404(id)
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
     try:
-        # First delete all related records (marks, attendance, enrollments)
-        Mark.query.filter_by(student_id=id).delete()
-        Attendance.query.filter_by(student_id=id).delete()
-        Enrollment.query.filter_by(student_id=id).delete()
-        
-        # Then delete the student
-        db.session.delete(student)
-        db.session.commit()
-        flash('Student deleted successfully!', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting student: {str(e)}', 'danger')
-    return redirect(url_for('list_students'))
+        cursor.execute("""
+            SELECT s.first_name, s.last_name, sub.name AS subject_name,
+            SUM(CASE WHEN a.status='Present' THEN 1 ELSE 0 END) AS present_days,
+            COUNT(a.id) AS total_days
+            FROM attendance a
+            JOIN students s ON s.id=a.student_id
+            JOIN subjects sub ON sub.id=a.subject_id
+            GROUP BY s.id, sub.id
+        """)
+        data = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+    return render_template('reports/attendance.html', attendance_data=data)
+
+# ------------------------------------------------------------
+# MAIN
+# ------------------------------------------------------------
 
 if __name__ == '__main__':
     app.run(debug=True)
